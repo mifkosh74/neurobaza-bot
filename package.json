@@ -5,9 +5,11 @@
   "description": "Бот «БОТ БАЗА»: бесплатный урок по Seedance и воронка на «Нейробазу»",
   "scripts": {
     "start": "node bot.mjs",
+    "main": "index.js",
     "test": "node --test"
   },
   "engines": {
-    "node": ">=22"
-  }
+    "node": ">=18"
+  },
+  "main": "index.js"
 }
