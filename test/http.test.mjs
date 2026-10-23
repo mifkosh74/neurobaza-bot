@@ -43,7 +43,7 @@ test('index.js → bot.mjs: /start по ссылке → приветствие,
     await new Promise(r => setTimeout(r, 600));
     const hello = sent.find(m => m.chat_id === 42);
     assert.ok(hello, `бот не ответил. Вывод:\n${out}`);
-    assert.match(hello.text, /Сейчас покажу как/);
+    assert.match(hello.text, /^Привет! Меня зовут Николай Константинов/);
     assert.equal(hello.reply_markup.inline_keyboard[0][0].callback_data, 'a:take_lesson');
     const db = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
     assert.equal(db.offset, 11);

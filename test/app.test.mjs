@@ -42,7 +42,7 @@ test('вход, урок, бонус через 15 минут, гайд', async 
   const t = setup();
   await t.msg(ADMIN, '/clear lesson_video'); // урок прописан в content.mjs — убираем, чтобы проверить «урока нет»
   await t.msg(1, '/start reels_oct');
-  assert.match(t.texts(1)[0], /Обычное видео можно превратить в сцену из другого мира. Сейчас покажу как/);
+  assert.match(t.texts(1)[0], /^Привет! Меня зовут Николай Константинов./, 'первое сообщение без заголовка (правка Крис 23.10)');
   assert.equal(t.app.db.users[1].source, 'reels_oct');
 
   await t.tap(1, 'a:take_lesson');
