@@ -3,13 +3,12 @@
   "private": true,
   "type": "module",
   "description": "Бот «БОТ БАЗА»: бесплатный урок по Seedance и воронка на «Нейробазу»",
+  "main": "index.js",
   "scripts": {
-    "start": "node bot.mjs",
-    "main": "index.js",
+    "start": "node index.js",
     "test": "node --test"
   },
   "engines": {
     "node": ">=18"
-  },
-  "main": "index.js"
+  }
 }
