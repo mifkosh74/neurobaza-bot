@@ -10,7 +10,7 @@ import {fileURLToPath} from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-test('bot.mjs: /start по ссылке → приветствие, база на диске', async () => {
+test('index.js → bot.mjs: /start по ссылке → приветствие, база на диске', async () => {
   const sent = [];
   let served = false;
   const server = http.createServer((req, res) => {
@@ -34,7 +34,7 @@ test('bot.mjs: /start по ссылке → приветствие, база н�
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'botbaza-'));
-  const child = spawn(process.execPath, ['bot.mjs'], {cwd: root, env: {...process.env, BOT_TOKEN: '1:test', API_BASE: `http://127.0.0.1:${server.address().port}`, DATA_DIR: dataDir}});
+  const child = spawn(process.execPath, ['index.js'], {cwd: root, env: {...process.env, BOT_TOKEN: '1:test', API_BASE: `http://127.0.0.1:${server.address().port}`, DATA_DIR: dataDir}});
   let out = '';
   child.stdout.on('data', d => out += d);
   child.stderr.on('data', d => out += d);
