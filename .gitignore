@@ -5,3 +5,5 @@ node_modules/
 *.log
 *.png
 *.zip
+*.mp4
+*.gif
