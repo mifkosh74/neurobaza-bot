@@ -103,7 +103,14 @@ export function createApp({api, store, now = () => Date.now(), overrides = {}, l
       if (payload && payload !== user.source) (user.sources ??= []).includes(payload) || user.sources.push(payload);
     }
     user.blocked = undefined;
+    user.stopped = undefined;
     user.form = undefined;
+    // «Старт» = согласие (условия — в описании бота). Пишем, когда и с какой редакцией документов.
+    const version = cfg().consent_version;
+    if (user.consent?.version !== version) {
+      user.consent = {version, at: now()};
+      (user.consents ??= []).push({version, at: now(), how: 'start'});
+    }
     const id = user.sent.d1_lesson ? 'd1_lesson' : 'd1_hello';
     if (await sendStep(user, id, {force: true}) === 'sent') user.sent[id] ??= now();
     store.save();
@@ -232,7 +239,7 @@ export function createApp({api, store, now = () => Date.now(), overrides = {}, l
     const perStep = WALK.map(id => `${id}: ${count(u => u.sent?.[id])}`).join(' · ');
     const limit = Number(cfg().razbor_per_week) || '∞';
     return `<b>Статистика</b>
-Всего зашли: ${users.length} (заблокировали бота: ${count(u => u.blocked)})
+Всего зашли: ${users.length} (заблокировали бота: ${count(u => u.blocked)}, отключили сообщения: ${count(u => u.stopped)})
 За сутки: ${count(u => t - u.startedAt < DAY)} · за 7 дней: ${count(u => t - u.startedAt < 7 * DAY)}
 
 Получили сообщение с уроком: ${count(u => u.sent?.d1_lesson)}
@@ -279,7 +286,7 @@ ${perStep}`;
   async function startBroadcast(m) {
     const src = m.reply_to_message;
     if (!src) return say(m.chat.id, 'Ответь командой /broadcast на сообщение, которое нужно разослать (текст, фото, видео — как есть).');
-    const users = Object.values(db.users).filter(u => u.startedAt && !u.blocked);
+    const users = Object.values(db.users).filter(u => u.startedAt && !u.blocked && !u.stopped);
     const all = users.length, nopaid = users.filter(u => !u.paid).length;
     return say(m.chat.id, `Разослать это сообщение?`, {inline_keyboard: [
       [{text: `Всем (${all})`, callback_data: `bc:all:${m.chat.id}:${src.message_id}`}],
@@ -288,7 +295,7 @@ ${perStep}`;
     ]});
   }
   async function runBroadcast(adminChat, mode, fromChat, messageId) {
-    const users = Object.values(db.users).filter(u => u.startedAt && !u.blocked && (mode === 'all' || !u.paid));
+    const users = Object.values(db.users).filter(u => u.startedAt && !u.blocked && !u.stopped && (mode === 'all' || !u.paid));
     let ok = 0;
     for (const u of users) {
       if (await call('copyMessage', {chat_id: u.id, from_chat_id: fromChat, message_id: messageId}, u)) ok++;
@@ -462,9 +469,31 @@ ${perStep}`;
       user.form = undefined;
       store.save();
     }
+    if (await personalData(user, text)) return;
     if (text.startsWith('/')) return;
     if (isAdmin(m.from.id)) return say(m.chat.id, 'Это сообщение никуда не ушло: от админа бот пересылает только ответы реплаем. Команды: /admin');
     return relay(user, m);
+  }
+
+  // Команды про персональные данные — для всех.
+  async function personalData(user, text) {
+    const cmd = text.trim().split(/\s+/)[0].split('@')[0].toLowerCase();
+    if (cmd === '/privacy') {await say(user.id, replies.privacy(cfg()), undefined, user); return true;}
+    if (cmd === '/stop' || cmd === '/unsubscribe') {
+      user.stopped = now();
+      (user.consents ??= []).push({at: now(), how: 'stop'});
+      store.save();
+      await say(user.id, replies.stopped, undefined, user);
+      return true;
+    }
+    if (cmd === '/delete') {
+      delete db.users[user.id];
+      for (const [k, uid] of Object.entries(db.replies)) if (Number(uid) === Number(user.id)) delete db.replies[k];
+      store.save();
+      await say(user.id, replies.deleted);
+      return true;
+    }
+    return false;
   }
 
   async function handleUpdate(u) {

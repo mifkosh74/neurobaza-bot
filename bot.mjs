@@ -6,6 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {openStore} from './store.mjs';
 import {createApp} from './app.mjs';
+import {botProfile} from './content.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const tokenFile = path.join(root, '.token');
@@ -40,6 +41,10 @@ process.on('SIGTERM', stop);
 
 const me = await api('getMe');
 await api('deleteWebhook').catch(() => {});
+// Описание с условиями согласия (видно до «Старт») и команды для всех.
+await api('setMyDescription', {description: botProfile.description}).catch(e => console.log(`Описание: ${e.message}`));
+await api('setMyShortDescription', {short_description: botProfile.short}).catch(e => console.log(`Короткое описание: ${e.message}`));
+await api('setMyCommands', {commands: botProfile.commands}).catch(e => console.log(`Команды: ${e.message}`));
 for (const admin of [].concat(app.cfg().admins)) {
   await api('setMyCommands', {scope: {type: 'chat', chat_id: admin}, commands: [
     {command: 'admin', description: 'Управление ботом'}, {command: 'stats', description: 'Статистика'},

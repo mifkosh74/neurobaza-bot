@@ -112,7 +112,7 @@ export function render(id, {settings, media = {}, now = Date.now(), early = fals
 // Что пора отправить человеку из расписания. null — ничего.
 // Возвращает {id, daily, early}. Если шаг не собирается (render.ok=false), вызывающий помечает его пропущенным.
 export function plan(user, now, settings) {
-  if (!user || user.blocked || user.paid || !user.startedAt) return null;
+  if (!user || user.blocked || user.stopped || user.paid || !user.startedAt) return null;
   const sent = user.sent || {}, skipped = user.skipped || {};
   const done = id => sent[id] || skipped[id];
 

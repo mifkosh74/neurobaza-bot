@@ -205,6 +205,27 @@ test('тестировщик сам сбрасывает себя и прома�
   assert.match(t.texts(ADMIN).at(-1), /Нужна дата/);
 });
 
+test('персональные данные: согласие при старте, /privacy, /stop, /delete', async () => {
+  const t = setup();
+  await t.msg(30, '/start', {from: {username: 'anya'}});
+  assert.deepEqual(t.app.db.users[30].consent, {version: '2026-10-14', at: t.clock.t}, 'Старт = согласие, записано с редакцией документов');
+  await t.msg(30, '/privacy', {from: {username: 'anya'}});
+  assert.match(t.texts(30).at(-1), /Константинов Николай Владимирович[\s\S]*neurokean\.ru\/legal\/privacy\.html[\s\S]*\/delete/);
+  await t.msg(30, '/stop', {from: {username: 'anya'}});
+  assert.ok(t.app.db.users[30].stopped);
+  t.clear();
+  t.clock.t = Date.parse('2026-10-25T15:05:00+03:00');
+  await t.app.tick();
+  assert.equal(t.texts(30).length, 0, 'после /stop цепочка молчит');
+  await t.msg(ADMIN, '/broadcast', {reply_to_message: {message_id: 5}});
+  assert.match(t.to(ADMIN).at(-1).reply_markup.inline_keyboard[0][0].text, /Всем \(0\)/, 'и рассылка его не трогает');
+  await t.msg(30, '/start', {from: {username: 'anya'}});
+  assert.equal(t.app.db.users[30].stopped, undefined, '/start возвращает сообщения');
+  await t.msg(30, '/delete', {from: {username: 'anya'}});
+  assert.equal(t.app.db.users[30], undefined);
+  assert.match(t.texts(30).at(-1), /Удалил твои данные/);
+});
+
 test('админка: готовность шагов, настройки, проход цепочки себе', async () => {
   const t = setup();
   await t.msg(ADMIN, '/steps');
