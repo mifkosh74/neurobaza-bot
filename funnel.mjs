@@ -39,10 +39,13 @@ const pad = n => String(n).padStart(2, '0');
 export function vars(settings, now, extra = {}) {
   const out = {
     instagram: settings.instagram || '',
-    review_count: String(settings.review_count ?? ''),
     days_phrase: extra.early ? 'За эти дни' : 'За эти 12 дней',
+    contest_until: '',
     deadline_date: '', deadline_next: '', deadline_time: '', deadline_datetime: '',
   };
+  // Конкурс работ идёт до конца указанного дня по Москве.
+  const contest = parseDeadline(settings.contest_until && `${settings.contest_until}T23:59:00+03:00`);
+  if (contest && now < contest) {const p = msk(contest); out.contest_until = `${p.d} ${MONTHS[p.mo]}`;}
   const dl = parseDeadline(settings.deadline);
   if (dl && dl - now >= (extra.final ? HOUR : OFFER_MARGIN)) {
     const p = msk(dl), next = msk(dl + MIN);

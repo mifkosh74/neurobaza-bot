@@ -5,7 +5,7 @@ import {plan, render, mskWeek, mskAt, parseDeadline, BONUS_DELAY, DAILY} from '.
 
 const HOUR = 3600e3, DAY = 24 * HOUR;
 const SENDERS = {photo: 'sendPhoto', video: 'sendVideo', animation: 'sendAnimation', document: 'sendDocument', voice: 'sendVoice', video_note: 'sendVideoNote', audio: 'sendAudio'};
-const CONFIG_KEYS = ['deadline', 'lesson_url', 'works_post_url', 'review_count', 'instagram', 'instagram_url', 'channel_url', 'site_url', 'contact_url', 'razbor_per_week', 'leads_chat'];
+const CONFIG_KEYS = ['deadline', 'contest_until', 'lesson_url', 'works_post_url', 'instagram', 'instagram_url', 'channel_url', 'site_url', 'contact_url', 'razbor_per_week', 'leads_chat'];
 const WALK = ['d1_hello', 'd1_lesson', 'bonus', ...DAILY, 'final'];
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -15,13 +15,17 @@ const ADMIN_HELP = `<b>Управление ботом</b>
 /preview d5 — прислать шаг себе как есть
 /next — прислать себе следующий шаг воронки (проверка цепочки; сначала /start)
 /reset_me — начать воронку заново для себя
+/users — кто заходил последним (id и ник)
+/reset @username — сбросить воронку человеку
+/tester @username — дать человеку /reset_me и /next для проверки бота; /untester — забрать
 
 /media — файлы по слотам
 /set lesson_video — следующий присланный файл ляжет в слот
 /clear d3_media — убрать файл из слота
 
-/config — настройки; /config review_count 5
+/config — настройки; /config works_post_url https://t.me/neurokean_ch/1632
 /config deadline 2026-10-31 23:59 — дата повышения (МСК), /config deadline off — убрать
+/config contest_until 2026-11-20 — до какого дня идёт конкурс работ (день 2)
 
 /paid 123456 или /paid @username — купил, убрать из продающей цепочки
 /unpaid 123456 — вернуть в цепочку
@@ -34,6 +38,8 @@ export function createApp({api, store, now = () => Date.now(), overrides = {}, l
   const db = store.data;
   const cfg = () => ({...base, ...overrides, ...db.config});
   const isAdmin = id => [].concat(cfg().admins).map(Number).includes(Number(id));
+  // Тестировщик (например, Крис) может сбросить себя и промотать дни, но не управляет ботом.
+  const isTester = id => isAdmin(id) || [].concat(db.config.testers || []).map(Number).includes(Number(id));
   const files = () => Object.fromEntries(Object.entries({...baseMedia, ...db.media}).filter(([, f]) => f));
 
   function fail(user, method, e) {
@@ -263,6 +269,7 @@ ${perStep}`;
       if (m) value = `${m[1]}-${m[2]}-${m[3]}T${(m[4] || '23').padStart(2, '0')}:${m[5] || '59'}:00+03:00`;
       if (!parseDeadline(value)) return 'Не понял дату. Пример: /config deadline 2026-10-31 23:59';
     }
+    if (key === 'contest_until' && value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return 'Нужна дата. Пример: /config contest_until 2026-11-20';
     if (['razbor_per_week', 'leads_chat'].includes(key) && value && !/^-?\d+$/.test(value)) return 'Нужно число.';
     if (/_url$/.test(key) && value && !/^https?:\/\//.test(value)) return 'Ссылка должна начинаться с https://';
     db.config[key] = ['razbor_per_week', 'leads_chat'].includes(key) && value ? Number(value) : value;
@@ -358,26 +365,56 @@ ${perStep}`;
         await sendStep({id: chat}, id, {force: true});
         return true;
       }
-      case '/next': {
-        const user = db.users[m.from.id];
-        if (!user?.startedAt) {await reply('Сначала /start, потом /next.'); return true;}
-        const id = WALK.find(s => !user.sent[s]);
-        if (!id) {await reply('Цепочка пройдена. /reset_me — начать заново.'); return true;}
-        const r = render(id, {settings: cfg(), media: files(), now: now()});
-        await reply(`<b>${id}</b> · ${esc(steps[id].name)}${r.ok ? '' : `\nЛюдям не уйдёт, не хватает: ${esc(r.missing.join(', '))}`}`);
-        await sendStep(user, id, {force: true});
-        user.sent[id] = now();
-        store.save();
+      case '/next': case '/reset_me': return selfTest(m, cmd);
+      case '/users': {
+        const list = Object.values(db.users).filter(u => u.startedAt).sort((a, b) => b.startedAt - a.startedAt).slice(0, 15);
+        await reply(list.length ? `<b>Последние зашедшие</b>\n${list.map(u => `${label(u)}${isTester(u.id) && !isAdmin(u.id) ? ' · тестировщик' : ''}`).join('\n')}` : 'Пока никто не заходил.');
         return true;
       }
-      case '/reset_me':
-        delete db.users[m.from.id];
+      case '/reset': {
+        const user = findUser(args[0]);
+        if (!user) {await reply('Не нашёл. Нужен id или @username человека, который заходил в бота (см. /users).'); return true;}
+        delete db.users[user.id];
         store.save();
-        await reply('Твоя воронка сброшена. /start — пройти заново.');
+        await reply(`${label(user)}: воронка сброшена, следующий /start — как в первый раз.`);
         return true;
+      }
+      case '/tester': case '/untester': {
+        const user = findUser(args[0]);
+        if (!user) {await reply('Не нашёл. Человек должен сначала зайти в бота (/start), потом /tester @username или id (см. /users).'); return true;}
+        const set = new Set([].concat(db.config.testers || []).map(Number));
+        if (cmd === '/tester') set.add(Number(user.id)); else set.delete(Number(user.id));
+        db.config.testers = [...set];
+        store.save();
+        await reply(cmd === '/tester'
+          ? `${label(user)} теперь тестировщик. Ему доступны:\n/reset_me — начать воронку заново\n/next — следующий день сразу, без ожидания`
+          : `${label(user)} больше не тестировщик.`);
+        return true;
+      }
       case '/broadcast': await startBroadcast(m); return true;
     }
     return false;
+  }
+
+  // /next и /reset_me — у админа и у тестировщиков.
+  async function selfTest(m, cmd) {
+    const reply = t => say(m.chat.id, t);
+    if (cmd === '/reset_me') {
+      delete db.users[m.from.id];
+      store.save();
+      await reply('Твоя воронка сброшена. /start — пройти заново.');
+      return true;
+    }
+    const user = db.users[m.from.id];
+    if (!user?.startedAt) {await reply('Сначала /start, потом /next.'); return true;}
+    const id = WALK.find(s => !user.sent[s]);
+    if (!id) {await reply('Цепочка пройдена. /reset_me — начать заново.'); return true;}
+    const r = render(id, {settings: cfg(), media: files(), now: now()});
+    await reply(`<b>${id}</b> · ${esc(steps[id].name)}${r.ok ? '' : `\nЛюдям не уйдёт, не хватает: ${esc(r.missing.join(', '))}`}`);
+    await sendStep(user, id, {force: true});
+    user.sent[id] = now();
+    store.save();
+    return true;
   }
 
   async function onCallback(q) {
@@ -416,6 +453,8 @@ ${perStep}`;
     const text = m.text || '';
     if (isAdmin(m.from.id) && await onAdmin(m)) return;
     if (m.chat.type !== 'private') return;
+    const testCmd = text.trim().split(/\s+/)[0].split('@')[0].toLowerCase();
+    if (['/next', '/reset_me'].includes(testCmd) && isTester(m.from.id)) return selfTest(m, testCmd);
     if (text.startsWith('/start')) return onStart(m.from, text.split(/\s+/)[1]);
     const user = touch(m.from);
     if (user.form) {

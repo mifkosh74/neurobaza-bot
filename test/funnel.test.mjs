@@ -28,7 +28,10 @@ test('шаги с дырами из ТЗ не готовы, готовые со�
   assert.ok(d5.missing.includes('[ОБЩЕЕ КОЛИЧЕСТВО]'));
   assert.equal(render('d7', {settings, now: t}).missing[0], 'файл d7_voice');
   const d2 = render('d2', {settings, now: t});
-  assert.deepEqual(d2.missing.sort(), ['{review_count}', 'ссылка works_post_url'].sort());
+  assert.equal(d2.ok, true, 'день 2: конкурс до 20 ноября и пост для работ заданы');
+  assert.match(d2.text, /подарю один Самостоятельный тариф НЕЙРОБАЗЫ 3\.0\. Работы принимаю до 20 ноября\./);
+  assert.equal(d2.keyboard.inline_keyboard[0][0].url, 'https://t.me/neurokean_ch/1632');
+  assert.deepEqual(render('d2', {settings, now: at('2026-11-21T10:00:00+03:00')}).missing, ['{contest_until}'], 'после конкурса день 2 не уходит');
   const d3 = render('d3', {settings, now: t});
   assert.equal(d3.ok, true);
   assert.match(d3.text, /^<b>Одна замена окружения/);

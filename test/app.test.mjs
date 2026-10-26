@@ -76,7 +76,8 @@ test('по дням: неготовые шаги пропускаются, од�
   await t.tap(2, 'a:take_lesson');
   t.clear();
 
-  t.clock.t = Date.parse('2026-10-24T15:05:00+03:00'); // день 2: не хватает числа разборов и поста для работ
+  await t.msg(ADMIN, '/config contest_until off'); // без конкурса день 2 не собирается — проверяем пропуск
+  t.clock.t = Date.parse('2026-10-24T15:05:00+03:00');
   await t.app.tick();
   assert.equal(t.texts(2).length, 0);
   assert.ok(t.app.db.users[2].skipped.d2);
@@ -178,6 +179,30 @@ test('файлы из content.mjs работают без загрузки, /cle
   await t.msg(ADMIN, '/clear lesson_video');
   await t.tap(10, 'a:take_lesson');
   assert.match(t.texts(10).at(-1), /Урок загружается/);
+});
+
+test('тестировщик сам сбрасывает себя и проматывает дни; админ сбрасывает любого', async () => {
+  const t = setup();
+  const KRIS = {username: 'kris_rr'};
+  await t.msg(20, '/start', {from: KRIS});
+  await t.msg(20, '/next', {from: KRIS});
+  assert.equal(t.texts(20).length, 1, 'пока не тестировщик, /next молча игнорируется');
+  await t.msg(ADMIN, '/users');
+  assert.match(t.texts(ADMIN).at(-1), /@kris_rr/);
+  await t.msg(ADMIN, '/tester @kris_rr');
+  assert.match(t.texts(ADMIN).at(-1), /теперь тестировщик/);
+  await t.msg(20, '/next', {from: KRIS});
+  assert.match(t.texts(20).at(-2), /d1_lesson/);
+  await t.msg(20, '/reset_me', {from: KRIS});
+  assert.equal(t.app.db.users[20], undefined);
+  await t.msg(20, '/start', {from: KRIS});
+  assert.match(t.texts(20).at(-1), /^Привет! Меня зовут/);
+  await t.msg(20, '/stats', {from: KRIS});
+  assert.doesNotMatch(t.texts(20).at(-1), /Статистика/, 'админские команды тестировщику недоступны');
+  await t.msg(ADMIN, '/reset @kris_rr');
+  assert.equal(t.app.db.users[20], undefined);
+  await t.msg(ADMIN, '/config contest_until 20.11');
+  assert.match(t.texts(ADMIN).at(-1), /Нужна дата/);
 });
 
 test('админка: готовность шагов, настройки, проход цепочки себе', async () => {
