@@ -394,7 +394,7 @@ ${perStep}`;
         db.config.testers = [...set];
         store.save();
         await reply(cmd === '/tester'
-          ? `${label(user)} теперь тестировщик. Ему доступны:\n/reset_me — начать воронку заново\n/next — следующий день сразу, без ожидания`
+          ? `${label(user)} теперь тестировщик. Доступно:\n/reset_me — начать воронку заново\n/next — следующий день сразу, без ожидания`
           : `${label(user)} больше не тестировщик.`);
         return true;
       }
