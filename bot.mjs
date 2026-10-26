@@ -29,6 +29,22 @@ async function api(method, payload = {}, attempt = 0) {
   throw error;
 }
 
+// CHECK_ONLY=1 — только проверка связи с Telegram (getMe раз в минуту), без приёма сообщений:
+// можно запустить рядом с рабочей копией, например чтобы проверить новую локацию хостинга.
+if (process.env.CHECK_ONLY) {
+  const check = async () => {
+    try {
+      const me = await api('getMe');
+      console.log(`Проверка связи: Telegram доступен, бот @${me.username} (${new Date().toISOString()})`);
+    } catch (e) {
+      console.log(`Проверка связи: Telegram НЕ доступен: ${e.message}${e.cause ? ` (${e.cause.code || e.cause.message})` : ''}`);
+    }
+  };
+  await check();
+  setInterval(check, 60e3);
+  await new Promise(() => {});
+}
+
 const overrides = {};
 if (process.env.ADMIN_IDS) overrides.admins = process.env.ADMIN_IDS.split(/[,\s]+/).filter(Boolean).map(Number);
 if (process.env.LEADS_CHAT_ID) overrides.leads_chat = Number(process.env.LEADS_CHAT_ID);
